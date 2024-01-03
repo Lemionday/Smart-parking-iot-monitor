@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 import useWebSocket from "react-use-websocket"
 import { User } from "./models/User"
+import { SlotStatus } from "./models/slotStatus"
+import { PaymentBill } from "./models/bill"
 
 type message = {
     type: string
@@ -15,6 +17,20 @@ export function useViewModel() {
 
     const [users, setUsers] = useState<User[]>([])
     const [alert, setAlert] = useState<string>("")
+    const [slotStatuses, setSlotStatuses] = useState<SlotStatus[]>(() => [
+        { slotId: "1", occupied: false },
+        { slotId: "2", occupied: false },
+        { slotId: "3", occupied: false },
+    ])
+
+    const [bill, setBill] = useState<PaymentBill>()
+    const [isWaitingForPayment, setIsWaitingForPayment] =
+        useState<boolean>(false)
+
+    function onPaymentDone() {
+        sendJsonMessage({ type: "payment-done", data: { uid: bill!.uid } })
+        setIsWaitingForPayment(false)
+    }
 
     useEffect(() => {
         if (lastJsonMessage !== undefined) {
@@ -37,19 +53,36 @@ export function useViewModel() {
                     setAlert(msg)
                     setMessageHistory((prev) => prev.concat(msg))
                     setUsers((prev) =>
-                        prev.map((user) =>
-                            user.uid === updatedUser.uid ? updatedUser : user
-                        )
+                        prev.map((user) => {
+                            if (user.uid === updatedUser.uid) {
+                                updatedUser.goInTS = new Date(user.goInTS)
+                                return updatedUser
+                            }
+
+                            return user
+                        })
                     )
                     break
                 }
                 case "bill": {
-                    const { msg, updatedUser } = onShowBill(data as message)
+                    const { msg, bill } = onShowBill(data as message)
                     setAlert(msg)
                     setMessageHistory((prev) => prev.concat(msg))
-                    setUsers((prev) =>
-                        prev.map((user) =>
-                            user.uid === updatedUser.uid ? updatedUser : user
+                    setBill(bill)
+                    setIsWaitingForPayment(true)
+                    break
+                }
+                case "slot-status-change": {
+                    const { msg, updatedSlot } = onSlotStatusChange(
+                        data as message
+                    )
+                    setAlert(msg)
+                    setMessageHistory((prev) => prev.concat(msg))
+                    setSlotStatuses((prev) =>
+                        prev.map((slot) =>
+                            slot.slotId === updatedSlot.slotId
+                                ? updatedSlot
+                                : slot
                         )
                     )
                     break
@@ -63,20 +96,33 @@ export function useViewModel() {
     return {
         messageHistory,
         users,
+        slotStatuses,
         alert,
+        bill,
+        isWaitingForPayment,
+        onPaymentDone,
     }
 }
 
-function onShowBill(data: message) {
-    const msg = "Payment done with RFID tag: " + (data.data as User).uid
+function onSlotStatusChange(data: message) {
+    const msg = "Slot status changed: " + (data.data as SlotStatus).slotId
 
-    const updatedUser = (data as message).data as User
-    updatedUser.goInTS = new Date(updatedUser.goInTS)
-    if (updatedUser.goOutTS !== undefined) {
-        updatedUser.goOutTS = new Date(updatedUser.goOutTS)
+    const updatedSlot = (data as message).data as SlotStatus
+    if (updatedSlot.changedTS !== undefined) {
+        updatedSlot.changedTS = new Date(updatedSlot.changedTS)
     }
 
-    return { msg, updatedUser }
+    return { msg, updatedSlot }
+}
+
+function onShowBill(data: message) {
+    const msg = "Show bill for RFID tag: " + (data.data as PaymentBill).uid
+
+    const bill = (data as message).data as PaymentBill
+    bill.goInTS = new Date(bill.goInTS)
+    bill.goOutTS = new Date(bill.goOutTS)
+
+    return { msg, bill }
 }
 
 function onUserGoOut(data: message) {

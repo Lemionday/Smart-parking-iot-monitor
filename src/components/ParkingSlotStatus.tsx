@@ -4,39 +4,32 @@ import {
     getCoreRowModel,
     useReactTable,
 } from "@tanstack/react-table"
-import { User } from "../models/User"
 import { Table } from "reactstrap"
+import { SlotStatus } from "../models/slotStatus"
 
-const columnHelper = createColumnHelper<User>()
+const columnHelper = createColumnHelper<SlotStatus>()
 
 const columns = [
-    columnHelper.accessor("uid", {
-        header: "RFID tag",
-        cell: (info) => info.getValue(),
+    columnHelper.accessor("occupied", {
+        header: "Slot Status",
+        cell: (info) => (info.getValue() ? "Occupied" : "Empty"),
     }),
-
-    columnHelper.accessor("goIn", {
-        header: "Status",
-        cell: (info) => (info.getValue() ? "Go In" : "Go Out"),
-    }),
-
-    columnHelper.accessor("goInTS", {
-        header: "Go In Time",
-        cell: (info) => info.getValue()!.toLocaleString(),
-    }),
-
-    columnHelper.accessor("goOutTS", {
-        header: "Go Out Time",
+    columnHelper.accessor("changedTS", {
+        header: "Last Changed At",
         cell: (info) =>
-            info.getValue() === undefined
-                ? ""
-                : info.getValue()!.toLocaleString(),
+            info.getValue() !== undefined
+                ? info.getValue()!.toLocaleString()
+                : "Unknown",
     }),
 ]
 
-export function CurrentUserTable({ users }: { users: User[] }) {
+export default function ParkingSlotStatus({
+    slotStatus,
+}: {
+    slotStatus: SlotStatus[]
+}) {
     const table = useReactTable({
-        data: users,
+        data: slotStatus,
         columns,
         getCoreRowModel: getCoreRowModel(),
     })
